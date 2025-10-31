@@ -19,6 +19,17 @@ SMTP_USER = os.environ.get("SMTP_USER")
 SMTP_PASS = os.environ.get("SMTP_PASS")
 EMAIL_TO  = os.environ.get("EMAIL_TO")
 
+# --- Location keywords for India ---
+INDIA_LOCATIONS = [
+    "india", "bangalore", "bengaluru", "mumbai", "delhi", "noida", "gurgaon", "hyderabad",
+    "chennai", "pune", "kolkata", "ahmedabad", "coimbatore", "jaipur", "surat", "visakhapatnam",
+    "bhubaneswar", "indore", "lucknow", "kanpur", "nagpur", "thiruvananthapuram", "kochi"
+]
+
+def is_india_job(text):
+    text_lower = text.lower()
+    return any(city in text_lower for city in INDIA_LOCATIONS)
+
 # --- Fetch jobs from generic boards ---
 def fetch_jobs():
     job_results = []
@@ -36,16 +47,18 @@ def fetch_jobs():
 
                 # Filter by relevant keyword
                 if any(k in text.lower() for k in ["java", "backend", "developer", "engineer"]):
-                    # Build absolute URL if relative
-                    if not href.startswith("http"):
-                        base = url.split("/jobs")[0]
-                        href = base + href
+                    # Filter by location (India or Indian cities)
+                    if is_india_job(text):
+                        # Build absolute URL if relative
+                        if not href.startswith("http"):
+                            base = url.split("/jobs")[0]
+                            href = base + href
 
-                    job_results.append({
-                        "title": text[:120],
-                        "link": href,
-                        "source": source
-                    })
+                        job_results.append({
+                            "title": text[:120],
+                            "link": href,
+                            "source": source
+                        })
         except Exception as e:
             print(f"⚠️ Error fetching from {source}: {e}")
 
