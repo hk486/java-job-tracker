@@ -10,8 +10,8 @@ SEARCH_QUERY = "java developer 3 years"
 JOB_BOARDS = {
     "LinkedIn": "https://www.linkedin.com/jobs/search/?keywords=java%20developer%203%20years",
     "Indeed": "https://www.indeed.com/jobs?q=java+developer+3+years",
-    "Naukri": "https://www.naukri.com/java-developer-3-years-jobs",
     "Glassdoor": "https://www.glassdoor.co.in/Job/java-developer-3-years-jobs-SRCH_KO0,25.htm",
+    "Naukri": "https://www.naukri.com/java-developer-3-years-jobs",
     "Monster": "https://www.foundit.in/search?query=java%20developer%203%20years"
 }
 
@@ -19,23 +19,21 @@ SMTP_USER = os.environ.get("SMTP_USER")
 SMTP_PASS = os.environ.get("SMTP_PASS")
 EMAIL_TO  = os.environ.get("EMAIL_TO")
 
-# --- Location keywords for India ---
-INDIA_LOCATIONS = [
-    "india", "bangalore", "bengaluru", "mumbai", "delhi", "noida", "gurgaon", "hyderabad",
-    "chennai", "pune", "kolkata", "ahmedabad", "coimbatore", "jaipur", "surat", "visakhapatnam",
-    "bhubaneswar", "indore", "lucknow", "kanpur", "nagpur", "thiruvananthapuram", "kochi"
-]
-
-def is_india_location(location_text):
-    if not location_text:
-        return False
-    text_lower = location_text.lower()
-    return any(city in text_lower for city in INDIA_LOCATIONS)
-
-# --- Fetch jobs from generic boards ---
 def fetch_jobs():
     job_results = []
     headers = {"User-Agent": "Mozilla/5.0"}
+
+    INDIA_LOCATIONS = [
+        "india", "bangalore", "bengaluru", "mumbai", "delhi", "noida", "gurgaon", "hyderabad",
+        "chennai", "pune", "kolkata", "ahmedabad", "coimbatore", "jaipur", "surat", "visakhapatnam",
+        "bhubaneswar", "indore", "lucknow", "kanpur", "nagpur", "thiruvananthapuram", "kochi"
+    ]
+
+    def is_india_location(text):
+        if not text:
+            return False
+        text_lower = text.lower()
+        return any(city in text_lower for city in INDIA_LOCATIONS)
 
     for source, url in JOB_BOARDS.items():
         try:
@@ -43,47 +41,88 @@ def fetch_jobs():
             r = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(r.text, "lxml")
 
-            # --- Indeed specific ---
+            # --- Indeed ---
             if source == "Indeed":
-                job_cards = soup.find_all("div", class_="jobsearch-SerpJobCard")
+                job_cards = soup.find_all("div", class_="job_seen_beacon")
                 for card in job_cards:
-                    title = card.find("a", class_="jobtitle")
-                    location = card.find("div", class_="companyLocation") or card.find("span", class_="location")
-                    if title and location and is_india_location(location.get_text()):
-                        job_results.append({
-                            "title": title.get_text(strip=True)[:120],
-                            "link": "https://www.indeed.com" + title.get("href", ""),
-                            "source": source
-                        })
+                    title_tag = card.find("h2", class_="jobTitle")
+                    location_tag = card.find("div", class_="companyLocation")
+                    if title_tag and location_tag:
+                        title = title_tag.get_text(strip=True)
+                        location = location_tag.get_text(strip=True)
+                        link_tag = title_tag.find("a")
+                        href = link_tag.get("href") if link_tag else ""
+                        if is_india_location(location):
+                            job_results.append({
+                                "title": title[:120],
+                                "link": "https://www.indeed.com" + href if href else url,
+                                "source": source
+                            })
                 continue
 
-            # --- Glassdoor specific ---
+            # --- Glassdoor ---
             if source == "Glassdoor":
-                job_listings = soup.find_all("li", class_="react-job-listing")
-                for card in job_listings:
+                job_cards = soup.find_all("li", class_="react-job-listing")
+                for card in job_cards:
                     title_tag = card.find("a", class_="jobLink")
                     location_tag = card.find("span", class_="jobLocation")
-                    if title_tag and location_tag and is_india_location(location_tag.get_text()):
-                        job_results.append({
-                            "title": title_tag.get_text(strip=True)[:120],
-                            "link": "https://www.glassdoor.co.in" + title_tag.get("href", ""),
-                            "source": source
-                        })
+                    if title_tag and location_tag:
+                        title = title_tag.get_text(strip=True)
+                        location = location_tag.get_text(strip=True)
+                        href = title_tag.get("href", "")
+                        if is_india_location(location):
+                            job_results.append({
+                                "title": title[:120],
+                                "link": "https://www.glassdoor.co.in" + href,
+                                "source": source
+                            })
                 continue
 
-            # --- Other boards: fallback to previous logic ---
+            # --- Naukri ---
+            if source == "Naukri":
+                job_cards = soup.find_all("article", class_="jobTuple")
+                for card in job_cards:
+                    title_tag = card.find("a", class_="title")
+                    location_tag = card.find("li", class_="location")
+                    if title_tag and location_tag:
+                        title = title_tag.get_text(strip=True)
+                        location = location_tag.get_text(strip=True)
+                        href = title_tag.get("href", "")
+                        if is_india_location(location):
+                            job_results.append({
+                                "title": title[:120],
+                                "link": href,
+                                "source": source
+                            })
+                continue
+
+            # --- Monster ---
+            if source == "Monster":
+                job_cards = soup.find_all("div", class_="job-tuple")
+                for card in job_cards:
+                    title_tag = card.find("a", class_="title")
+                    location_tag = card.find("div", class_="location")
+                    if title_tag and location_tag:
+                        title = title_tag.get_text(strip=True)
+                        location = location_tag.get_text(strip=True)
+                        href = title_tag.get("href", "")
+                        if is_india_location(location):
+                            job_results.append({
+                                "title": title[:120],
+                                "link": href,
+                                "source": source
+                            })
+                continue
+
+            # --- LinkedIn (fallback: filter by title/link) ---
             for link in soup.find_all("a", href=True):
                 text = link.get_text(strip=True)
                 href = link["href"]
-
-                # Filter by relevant keyword
                 if any(k in text.lower() for k in ["java", "backend", "developer", "engineer"]):
-                    if is_india_location(text):
-                        # Build absolute URL if relative
+                    if is_india_location(text) or is_india_location(href):
                         if not href.startswith("http"):
                             base = url.split("/jobs")[0]
                             href = base + href
-
                         job_results.append({
                             "title": text[:120],
                             "link": href,
@@ -96,14 +135,12 @@ def fetch_jobs():
     unique = {job["link"]: job for job in job_results}
     return list(unique.values())
 
-# --- LinkedIn Outreach Message ---
 def outreach_message(title, source):
     return (
         f"I came across the '{title}' role on {source}, and it aligns well with my Java backend experience. "
         f"I’d appreciate the opportunity to discuss how I could contribute to this position."
     )
 
-# --- Email Sender ---
 def send_email(jobs):
     if not jobs:
         print("No new jobs found.")
@@ -125,7 +162,6 @@ def send_email(jobs):
 
     print("✅ Email sent successfully!")
 
-# --- Main ---
 if __name__ == "__main__":
     print("🚀 Starting hourly job search...")
     jobs = fetch_jobs()
