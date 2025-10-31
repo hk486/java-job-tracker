@@ -26,8 +26,10 @@ INDIA_LOCATIONS = [
     "bhubaneswar", "indore", "lucknow", "kanpur", "nagpur", "thiruvananthapuram", "kochi"
 ]
 
-def is_india_job(text):
-    text_lower = text.lower()
+def is_india_location(location_text):
+    if not location_text:
+        return False
+    text_lower = location_text.lower()
     return any(city in text_lower for city in INDIA_LOCATIONS)
 
 # --- Fetch jobs from generic boards ---
@@ -41,14 +43,42 @@ def fetch_jobs():
             r = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(r.text, "lxml")
 
+            # --- Indeed specific ---
+            if source == "Indeed":
+                job_cards = soup.find_all("div", class_="jobsearch-SerpJobCard")
+                for card in job_cards:
+                    title = card.find("a", class_="jobtitle")
+                    location = card.find("div", class_="companyLocation") or card.find("span", class_="location")
+                    if title and location and is_india_location(location.get_text()):
+                        job_results.append({
+                            "title": title.get_text(strip=True)[:120],
+                            "link": "https://www.indeed.com" + title.get("href", ""),
+                            "source": source
+                        })
+                continue
+
+            # --- Glassdoor specific ---
+            if source == "Glassdoor":
+                job_listings = soup.find_all("li", class_="react-job-listing")
+                for card in job_listings:
+                    title_tag = card.find("a", class_="jobLink")
+                    location_tag = card.find("span", class_="jobLocation")
+                    if title_tag and location_tag and is_india_location(location_tag.get_text()):
+                        job_results.append({
+                            "title": title_tag.get_text(strip=True)[:120],
+                            "link": "https://www.glassdoor.co.in" + title_tag.get("href", ""),
+                            "source": source
+                        })
+                continue
+
+            # --- Other boards: fallback to previous logic ---
             for link in soup.find_all("a", href=True):
                 text = link.get_text(strip=True)
                 href = link["href"]
 
                 # Filter by relevant keyword
                 if any(k in text.lower() for k in ["java", "backend", "developer", "engineer"]):
-                    # Filter by location (India or Indian cities)
-                    if is_india_job(text):
+                    if is_india_location(text):
                         # Build absolute URL if relative
                         if not href.startswith("http"):
                             base = url.split("/jobs")[0]
